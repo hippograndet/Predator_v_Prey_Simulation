@@ -36,6 +36,7 @@
 3. GAMA will automatically detect the project as a **User Model** named `Predator_v_Prey`
 4. In the GAMA navigator panel, open:
    `User Models / Predator_v_Prey / models / Predator_Prey.gaml`
+   (this is the entry-point file that imports all sub-modules)
 5. In the file, locate the **`Simulation_Testing`** experiment at the bottom and click the green **Run** button
 6. The simulation map and all visualisation charts will open automatically
 
@@ -105,15 +106,23 @@ All parameters are exposed in the GAMA experiment GUI under labelled categories.
 
 ```
 .
-├── gama/
+├── Predator_v_Prey/
 │   ├── models/
-│   │   └── Predator_Prey.gaml   # Full simulation model (GAML)
+│   │   ├── Predator_Prey.gaml        # Entry point: imports all modules + experiment
+│   │   ├── includes/
+│   │   │   ├── parameters.gaml       # All global parameter declarations
+│   │   │   └── nn_math.gaml          # Activation functions & weight utilities
+│   │   └── species/
+│   │       ├── animal.gaml           # Base species (sensors, NN, movement, combat)
+│   │       ├── prey.gaml             # Prey species
+│   │       ├── predator.gaml         # Predator species
+│   │       └── mountain.gaml         # Terrain obstacle
 │   └── includes/
-│       ├── energy_icon.png      # UI overlay icon
-│       └── health_icon.png      # UI overlay icon
+│       ├── energy_icon.png           # UI overlay icon
+│       └── health_icon.png           # UI overlay icon
 ├── docs/
-│   └── figures/                 # Screenshots and GIFs (add your own)
-├── s1849145.pdf                 # Full dissertation
+│   └── figures/                      # Screenshots and GIFs (add your own)
+├── s1849145.pdf                      # Full dissertation
 ├── README.md
 └── LICENSE
 ```
