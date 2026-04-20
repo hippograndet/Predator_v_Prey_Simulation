@@ -8,6 +8,8 @@
 
 model NeuralNetworkMath
 
+import "parameters.gaml"
+
 global {
 
     // --- Activation functions: scalar ---

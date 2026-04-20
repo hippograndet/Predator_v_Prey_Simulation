@@ -7,6 +7,8 @@
 
 model Prey
 
+import "animal.gaml"
+
 species prey parent: animal {
 
     bool man_freeze <- false;

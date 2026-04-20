@@ -9,6 +9,9 @@
 
 model Animal
 
+import "../includes/nn_math.gaml"
+import "mountain.gaml"
+
 species animal skills: [moving] {
 
     // --- Identity & Lineage ---
@@ -322,12 +325,7 @@ species animal skills: [moving] {
             }
         }
         if attack_close and attack_to_inflict > 0.0 {
-            list<animal> enemies_in_range_circle;
-            if enemy_species = 'prey' {
-                enemies_in_range_circle <- prey at_distance(body_radius / 2);
-            } else if enemy_species = 'predator' {
-                enemies_in_range_circle <- predator at_distance(body_radius / 2);
-            }
+            list<animal> enemies_in_range_circle <- ((agents of_generic_species animal) where (string(species(each)) = enemy_species)) at_distance(body_radius / 2);
             if length(enemies_in_range_circle) > 0 {
                 if attack_rollover {
                     loop i from: 0 to: length(enemies_in_range_circle) - 1 {
@@ -384,8 +382,7 @@ species animal skills: [moving] {
     }
 
     action generate_sensors {
-        list<animal> agents_in_sensor_radius <- prey at_distance(sensor_distance_range - default_body_radius);
-        agents_in_sensor_radius <- agents_in_sensor_radius + (predator at_distance(sensor_distance_range + default_body_radius));
+        list<animal> agents_in_sensor_radius <- ((agents of_generic_species animal) where (each != self)) at_distance(sensor_distance_range + default_body_radius);
 
         sensed_agents <- [];
         sensed_agents_dist <- [];

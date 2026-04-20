@@ -17,15 +17,10 @@ global {
     int init_prey_count <- int((pop_per_10_square * environment_size^2 / 100) * (1 - init_predator_prey_ratio));
     int init_predator_count <- int((pop_per_10_square * environment_size^2 / 100) * init_predator_prey_ratio);
 
-    int nb_preys -> {length(prey)};
-    int nb_predators -> {length(predator)};
     int nb_suffocated <- 0;
-    int nb_animals -> nb_preys + nb_predators;
-    int nb_rays_total -> sum(collect(prey, each.sensor_nb_of_rays)) + sum(collect(predator, each.sensor_nb_of_rays));
 
     // --- Performance Logging ---
     bool record_duration <- false;
-    float duration_per_ray -> float(duration) / nb_rays_total;
 
     // --- Terrain ---
     bool mountain_b <- true;

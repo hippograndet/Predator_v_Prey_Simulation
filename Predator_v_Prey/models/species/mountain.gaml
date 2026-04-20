@@ -7,6 +7,8 @@
 
 model Mountain
 
+import "../includes/parameters.gaml"
+
 species mountain {
 
     init {

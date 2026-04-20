@@ -1,10 +1,10 @@
-# GAMA Platform
+# GAMA Platform — workspace metadata (machine-specific, regenerated on first launch)
+/.metadata/
 *.cache
-/gama/workspace/
-/gama/.metadata/
-/gama/.settings/
 *.log
-/gama/models/*.png
+
+# GAMA autosave screenshots
+/Predator_v_Prey/models/*.png
 
 # OS
 .DS_Store

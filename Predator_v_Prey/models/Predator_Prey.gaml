@@ -16,6 +16,13 @@ import "species/predator.gaml"
 
 global {
 
+    // --- Species-dependent counters (require prey/predator to be in scope) ---
+    int nb_preys -> {length(prey)};
+    int nb_predators -> {length(predator)};
+    int nb_animals -> nb_preys + nb_predators;
+    int nb_rays_total -> sum(collect(prey, each.sensor_nb_of_rays)) + sum(collect(predator, each.sensor_nb_of_rays));
+    float duration_per_ray -> float(duration) / nb_rays_total;
+
     // --- NN output distribution tracking (used by heatmap displays) ---
     list l_detected_type_idx_short <- [
         'Left Sense Prey',      'Left Sense Nil',      'Left Sense Predator',
@@ -293,11 +300,17 @@ experiment Simulation_Testing type: gui benchmark: true {
 
 
     output {
-        monitor "Number Preys"      value: nb_preys;
-        monitor "Number Predators"  value: nb_predators;
-        monitor "Number of Rays"    value: default_number_of_rays;
+        // 6 displays → #split creates a 3×2 grid; each display has at most 2 charts.
+        // GAMA does not support tabs-within-a-panel via GAML, so each chart group
+        // gets its own full display instead of being crammed into a 2×2 sub-grid.
+        layout #split parameters: true editors: false;
+        monitor "Prey"       value: nb_preys;
+        monitor "Predators"  value: nb_predators;
+        monitor "Rays/cycle" value: default_number_of_rays;
 
-        display map_display autosave: 'Simulation_' + string(environment_size) + '_' + string(default_n_hidden_neurons) + '_cycle' + string(int(cycle / 100) * 100) + '.png' {
+        // 1 ── Simulation map ──────────────────────────────────────────────────
+        display Simulation background: #white
+            autosave: 'Simulation_' + string(environment_size) + '_' + string(default_n_hidden_neurons) + '_cycle' + string(int(cycle / 100) * 100) + '.png' {
             species mountain  aspect: mountain_disp;
             species prey      aspect: body;
             species prey      aspect: health_energy_bar;
@@ -305,20 +318,29 @@ experiment Simulation_Testing type: gui benchmark: true {
             species predator  aspect: body;
             species predator  aspect: health_energy_bar;
             species predator  aspect: neuronal_sensors;
+            // Single compact status line — does not cover agents
+            overlay position: {0, 0} size: {200, 10} background: rgb(0, 0, 0, 160) {
+                draw 'Cycle: ' + string(cycle) + '   Prey: ' + string(nb_preys) + '   Pred: ' + string(nb_predators)
+                    at: {10, 5} color: #white font: font('SansSerif', 10, #plain);
+            }
         }
 
-        display Population_Evolution refresh: every(simulation_charts_refresh_count#cycles) type: 2d {
+        // 2 ── Population counts + ratio ───────────────────────────────────────
+        display Population_Analysis
+            refresh: every(simulation_charts_refresh_count#cycles) type: 2d {
             chart "Species Count" type: series size: {1, 0.67} position: {0, 0} {
                 data "Prey"     value: nb_preys     color: #blue;
                 data "Predator" value: nb_predators color: #red;
             }
-            chart "Predator to Prey Ratio" type: series size: {1, 0.33} position: {0, 0.67} {
-                data "" value: nb_predators / nb_preys color: #black;
+            chart "Predator / Prey Ratio" type: series size: {1, 0.33} position: {0, 0.67} {
+                data "" value: (nb_preys > 0) ? (nb_predators / nb_preys) : 0.0 color: #black;
             }
         }
 
-        display Movement_Evolution refresh: every(behavior_charts_refresh_count#cycles) type: 2d {
-            chart "Speed Prey" type: box_whisker size: {0.5, 0.5} position: {0.0, 0.0} series_label_position: yaxis {
+        // 3 ── Movement: speed + heading delta (side-by-side) ─────────────────
+        display Movement
+            refresh: every(behavior_charts_refresh_count#cycles) type: 2d {
+            chart "Speed" type: box_whisker size: {0.5, 1} position: {0, 0} series_label_position: yaxis {
                 data "Prey" value: [
                     mean(collect(prey where !each.exhausted, each.speed)),
                     median(collect(prey where !each.exhausted, each.speed)),
@@ -327,8 +349,6 @@ experiment Simulation_Testing type: gui benchmark: true {
                     min(collect(prey where !each.exhausted, each.speed)),
                     max(collect(prey where !each.exhausted, each.speed))
                 ] color: #blue accumulate_values: true;
-            }
-            chart "Speed Predator" type: box_whisker size: {0.5, 0.5} position: {0.0, 0.5} series_label_position: yaxis {
                 data "Predator" value: [
                     mean(collect(predator where !each.digesting, each.speed)),
                     median(collect(predator where !each.digesting, each.speed)),
@@ -338,7 +358,7 @@ experiment Simulation_Testing type: gui benchmark: true {
                     max(predator where !each.digesting collect each.speed)
                 ] color: #red accumulate_values: true;
             }
-            chart "Delta Heading Prey" type: box_whisker size: {0.5, 0.5} position: {0.5, 0.0} series_label_position: yaxis {
+            chart "Heading Delta" type: box_whisker size: {0.5, 1} position: {0.5, 0} series_label_position: yaxis {
                 data "Prey" value: [
                     mean(collect(prey where !each.exhausted, abs(each.heading_delta))),
                     median(collect(prey where !each.exhausted, abs(each.heading_delta))),
@@ -347,8 +367,6 @@ experiment Simulation_Testing type: gui benchmark: true {
                     min(collect(prey where !each.exhausted, abs(each.heading_delta))),
                     max(collect(prey where !each.exhausted, abs(each.heading_delta)))
                 ] color: #blue accumulate_values: true;
-            }
-            chart "Delta Heading Predator" type: box_whisker size: {0.5, 0.5} position: {0.5, 0.5} series_label_position: yaxis {
                 data "Predator" value: [
                     mean(collect(predator where !each.digesting, abs(each.heading_delta))),
                     median(collect(predator where !each.digesting, abs(each.heading_delta))),
@@ -360,8 +378,10 @@ experiment Simulation_Testing type: gui benchmark: true {
             }
         }
 
-        display Agent_Reaction_Evolution refresh: every(behavior_charts_refresh_count#cycles) type: 2d {
-            chart "Prey Angle Calibration Overall" type: box_whisker size: {0.5, 0.33} position: {0, 0} series_label_position: yaxis {
+        // 4 ── Reaction calibration: overall + relative (side-by-side) ────────
+        display Calibration
+            refresh: every(behavior_charts_refresh_count#cycles) type: 2d {
+            chart "Angle Calibration (Overall)" type: box_whisker size: {0.5, 1} position: {0, 0} series_label_position: yaxis {
                 data "Prey" value: [
                     mean(collect(prey where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta))),
                     median(collect(prey where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta))),
@@ -370,8 +390,6 @@ experiment Simulation_Testing type: gui benchmark: true {
                     min(collect(prey where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta))),
                     max(collect(prey where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta)))
                 ] color: #blue accumulate_values: true;
-            }
-            chart "Predator Angle Calibration Overall" type: box_whisker size: {0.5, 0.33} position: {0.5, 0} series_label_position: yaxis {
                 data "Predator" value: [
                     mean(collect(predator where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta))),
                     median(collect(predator where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta))),
@@ -381,27 +399,7 @@ experiment Simulation_Testing type: gui benchmark: true {
                     max(collect(predator where each.closest_sensed_enemy, abs(each.closest_sensed_angle - each.heading_delta)))
                 ] color: #red accumulate_values: true;
             }
-            chart "Prey Angle Calibration Close" type: box_whisker size: {0.5, 0.33} position: {0, 0.33} series_label_position: yaxis {
-                data "Prey" value: [
-                    mean(collect(prey where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2)), abs(each.closest_sensed_angle - each.heading_delta))),
-                    median(collect(prey where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2)), abs(each.closest_sensed_angle - each.heading_delta))),
-                    quantile((prey where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2)) sort_by abs(each.closest_sensed_angle - each.heading_delta)) collect abs(each.closest_sensed_angle - each.heading_delta), 0.25),
-                    quantile((prey where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2)) sort_by abs(each.closest_sensed_angle - each.heading_delta)) collect abs(each.closest_sensed_angle - each.heading_delta), 0.75),
-                    min(collect(prey where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2)), abs(each.closest_sensed_angle - each.heading_delta))),
-                    max(collect(prey where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2)), abs(each.closest_sensed_angle - each.heading_delta)))
-                ] color: #blue accumulate_values: true;
-            }
-            chart "Predator Angle Calibration Close" type: box_whisker size: {0.5, 0.33} position: {0.5, 0.33} series_label_position: yaxis {
-                data "Predator" value: [
-                    mean(collect(predator where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2) and (abs(each.closest_sensed_angle) > 10.0)), abs(each.closest_sensed_angle - each.heading_delta))),
-                    median(collect(predator where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2) and (abs(each.closest_sensed_angle) > 10.0)), abs(each.closest_sensed_angle - each.heading_delta))),
-                    quantile((predator where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2) and (abs(each.closest_sensed_angle) > 10.0)) sort_by abs(each.closest_sensed_angle - each.heading_delta)) collect abs(each.closest_sensed_angle - each.heading_delta), 0.25),
-                    quantile((predator where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2) and (abs(each.closest_sensed_angle) > 10.0)) sort_by abs(each.closest_sensed_angle - each.heading_delta)) collect abs(each.closest_sensed_angle - each.heading_delta), 0.75),
-                    min(collect(predator where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2) and (abs(each.closest_sensed_angle) > 10.0)), abs(each.closest_sensed_angle - each.heading_delta))),
-                    max(collect(predator where (each.closest_sensed_enemy and (each.closest_sensed_dist < each.sensor_angle_range / 2) and (abs(each.closest_sensed_angle) > 10.0)), abs(each.closest_sensed_angle - each.heading_delta)))
-                ] color: #red accumulate_values: true;
-            }
-            chart "Prey Angle Calibration Relative" type: box_whisker size: {0.5, 0.33} position: {0, 0.67} series_label_position: yaxis y_range: {0.0, 4.0} {
+            chart "Angle Calibration (Relative)" type: box_whisker size: {0.5, 1} position: {0.5, 0} series_label_position: yaxis {
                 data "Prey" value: [
                     mean(collect(prey where (each.closest_sensed_enemy and (abs(each.closest_sensed_angle) > 10.0)), (abs(each.heading_delta - each.closest_sensed_angle) / abs(each.closest_sensed_angle)))),
                     median(collect(prey where (each.closest_sensed_enemy and (abs(each.closest_sensed_angle) > 10.0)), (abs(each.heading_delta - each.closest_sensed_angle) / abs(each.closest_sensed_angle)))),
@@ -410,8 +408,6 @@ experiment Simulation_Testing type: gui benchmark: true {
                     min(collect(prey where (each.closest_sensed_enemy and (abs(each.closest_sensed_angle) > 10.0)), (abs(each.heading_delta - each.closest_sensed_angle) / abs(each.closest_sensed_angle)))),
                     max(collect(prey where (each.closest_sensed_enemy and (abs(each.closest_sensed_angle) > 10.0)), (abs(each.heading_delta - each.closest_sensed_angle) / abs(each.closest_sensed_angle))))
                 ] color: #blue accumulate_values: true;
-            }
-            chart "Predator Angle Calibration Relative" type: box_whisker size: {0.5, 0.33} position: {0.5, 0.67} series_label_position: yaxis y_range: {0.0, 2.0} {
                 data "Predator" value: [
                     mean(collect(predator where (each.closest_sensed_enemy and (abs(each.closest_sensed_angle) > 15.0)), (abs(each.heading_delta - each.closest_sensed_angle) / abs(each.closest_sensed_angle)))),
                     median(collect(predator where (each.closest_sensed_enemy and (abs(each.closest_sensed_angle) > 15.0)), (abs(each.heading_delta - each.closest_sensed_angle) / abs(each.closest_sensed_angle)))),
@@ -423,34 +419,33 @@ experiment Simulation_Testing type: gui benchmark: true {
             }
         }
 
-        display brain_prey_heading_delta type: 2d {
-            chart "Prey Heading Delta Reaction to Sensed Agent Type" type: heatmap
+        // 5 ── Brain heatmaps: prey (side-by-side) ────────────────────────────
+        display Brain_Prey type: 2d {
+            chart "Prey: Heading Delta by Input" type: heatmap size: {0.5, 1} position: {0, 0}
                 x_serie_labels: l_detected_type_idx_short
-                x_label: 'Agent Sensed per Sensor Group' y_label: 'Cycle' {
+                x_label: 'Sensor Group Input' y_label: 'Cycle' {
                 data "Heading Delta" value: l_detected_type_prey_hd
                     color: [#darkblue, #ghostwhite, #darkgreen] accumulate_values: false;
             }
-        }
-        display brain_prey_speed type: 2d {
-            chart "Prey Speed Reaction to Sensed Agent Type" type: heatmap
+            chart "Prey: Speed by Input" type: heatmap size: {0.5, 1} position: {0.5, 0}
                 x_serie_labels: l_detected_type_idx_gen
-                x_label: 'Agent Sensed per Sensor Group' y_label: 'Cycle' {
+                x_label: 'Sensor Group Input' y_label: 'Cycle' {
                 data "Speed" value: l_detected_type_prey_sp
                     color: [#skyblue, #darkblue] accumulate_values: false;
             }
         }
-        display brain_predator_heading_delta type: 2d {
-            chart "Predator Heading Delta Reaction to Sensed Agent Type" type: heatmap
+
+        // 6 ── Brain heatmaps: predator (side-by-side) ────────────────────────
+        display Brain_Predator type: 2d {
+            chart "Predator: Heading Delta by Input" type: heatmap size: {0.5, 1} position: {0, 0}
                 x_serie_labels: l_detected_type_idx_short
-                x_label: 'Agent Sensed per Sensor Group' y_label: 'Cycle' {
+                x_label: 'Sensor Group Input' y_label: 'Cycle' {
                 data "Heading Delta" value: l_detected_type_predator_hd
                     color: [#darkblue, #ghostwhite, #darkgreen] accumulate_values: false;
             }
-        }
-        display brain_predator_speed type: 2d {
-            chart "Predator Speed Reaction to Sensed Agent Type" type: heatmap
+            chart "Predator: Speed by Input" type: heatmap size: {0.5, 1} position: {0.5, 0}
                 x_serie_labels: l_detected_type_idx_gen
-                x_label: 'Agent Sensed per Sensor Group' y_label: 'Cycle' {
+                x_label: 'Sensor Group Input' y_label: 'Cycle' {
                 data "Speed" value: l_detected_type_predator_sp
                     color: [#skyblue, #darkblue] accumulate_values: false;
             }
